@@ -1,0 +1,23 @@
+syntax = "proto3";
+package chatroom;
+
+service Auth {
+    rpc login(LoginRequest) returns (LoginResult){};
+    rpc create_user(User) returns (CreationResult){};
+    rpc logout(LogoutRequest) returns (LogoutResult){};
+}
+message LoginRequest{}
+message LoginResult{}
+message User{}
+message CreationResult{}
+message LogoutRequest{}
+message LogoutResult{}
+
+service Chat{
+    rpc send_message(MessagePacket) returns (MessageSendResult){};
+    rpc get_history(HistoryRequest) returns (HistoryResult){};
+}
+message MessagePacket{}
+message MessageSendResult{}
+message HistoryRequest{}
+message HistoryResult{}
