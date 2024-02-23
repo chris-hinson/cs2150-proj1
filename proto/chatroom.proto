@@ -19,7 +19,10 @@ service Chat{
     rpc chatlink(stream MessagePacket) returns (stream MessagePacket){};
     //rpc get_history(HistoryRequest) returns (HistoryResult){};
 }
-message MessagePacket{}
+message MessagePacket{
+    string msg = 1;
+    uint64 ts = 2;
+}
 //message MessageSendResult{}
 //message HistoryRequest{}
 //message HistoryResult{}
