@@ -21,7 +21,8 @@ service Chat{
 }
 message MessagePacket{
     string msg = 1;
-    uint64 ts = 2;
+    string user = 2;
+    uint64 ts = 3;
 }
 //message MessageSendResult{}
 //message HistoryRequest{}
