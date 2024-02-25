@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Default)]
 pub struct ChatServerImpl {
-    //history: Vec<MessagePacket>
+    history: Arc<RwLock<Vec<MessagePacket>>>,
     connections: Arc<RwLock<HashMap<String, mpsc::Sender<MessagePacket>>>>,
 }
 
@@ -53,7 +53,6 @@ impl Auth for ChatServerImpl {
     }
 }
 #[tonic::async_trait]
-
 impl Chat for ChatServerImpl {
     #[allow(non_camel_case_types)]
     type chatlinkStream =
@@ -94,12 +93,33 @@ impl Chat for ChatServerImpl {
         &self,
         request: Request<MessagePacket>,
     ) -> Result<Response<Nothing>, Status> {
+        //send the message to all currently connected users
         let req_data = request.into_inner();
         println!("got send message command: {:?}", req_data);
         let connections = self.connections.read().await;
         for (key, value) in &*connections {
             println!("key: {}", key);
             value.send(req_data.clone()).await.unwrap();
+        }
+
+        //append the message to the history
+        let mut history = self.history.write().await;
+        history.push(req_data);
+        drop(history);
+
+        Ok(Response::new(Nothing {}))
+    }
+
+    async fn get_history(&self, request: Request<Req>) -> Result<Response<Nothing>, Status> {
+        //who are we giving the collective history to?
+        let name = request.into_inner().username;
+
+        //shared state gaurd for both the msg channel and the global history
+        let channels = self.connections.read().await;
+        let history = self.history.read().await;
+        //just send them every message in the history
+        for msg in &*history {
+            channels[&name].send(msg.clone()).await.unwrap();
         }
 
         Ok(Response::new(Nothing {}))

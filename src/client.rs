@@ -5,6 +5,7 @@
 }*/
 use proj1::chatroom_data::chat_client::ChatClient;
 use proj1::chatroom_data::MessagePacket;
+use proj1::chatroom_data::Req;
 use std::error::Error;
 use tonic::transport::Channel;
 use tonic::Request;
@@ -67,13 +68,21 @@ async fn run_chatlink(
         }
     });
 
+    client
+        .get_history(Req {
+            username: name.clone(),
+        })
+        .await
+        .unwrap();
+
     //TODO: make this loop breakable
     loop {
         let mut temp_buf = shared_buf.write().await;
         for i in &*temp_buf {
-            println!("{:?}", i);
+            println!("[{}]:{}", i.user, i.msg);
         }
         *temp_buf = Vec::new();
+        drop(temp_buf);
 
         match rx.try_recv() {
             Ok(msg) => {
@@ -83,8 +92,6 @@ async fn run_chatlink(
             }
             Err(_e) => {}
         }
-
-        drop(temp_buf)
     }
 
     Ok(())

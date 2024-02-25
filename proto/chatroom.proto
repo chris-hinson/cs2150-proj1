@@ -24,7 +24,7 @@ message Nothing{};
 //in which they will stay until they choose to terminate themselves
 service Chat{
     rpc chatlink(Req) returns (stream MessagePacket){};
-    //rpc get_history(HistoryRequest) returns (HistoryResult){};
+    rpc get_history(Req) returns (Nothing){};
     rpc send_message(MessagePacket) returns (Nothing){};
 }
 message MessagePacket{
