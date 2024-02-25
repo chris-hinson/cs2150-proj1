@@ -9,8 +9,8 @@ use std::error::Error;
 use tonic::transport::Channel;
 use tonic::Request;
 
-use tokio::sync::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 //use colored::Colorize;
 use std::env;
@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //TODO: auth or smth idfk
 
     let rx = recv_from_stdin(10);
-    run_chatlink(&mut client,rx,args[1].clone()).await?;
+    run_chatlink(&mut client, rx, args[1].clone()).await?;
 
     //once we reach here, the client has attempted to disconnect, so make the deauth call for them implicitly
 
@@ -35,55 +35,60 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[allow(unreachable_code)]
-async fn run_chatlink(client: &mut ChatClient<Channel>,mut rx: tokio::sync::mpsc::Receiver<String>, name: String)->Result<(), Box<dyn Error>>{
-    let response = client.chatlink(Request::new(proj1::chatroom_data::Req{username: name.clone()})).await?;
+async fn run_chatlink(
+    client: &mut ChatClient<Channel>,
+    mut rx: tokio::sync::mpsc::Receiver<String>,
+    name: String,
+) -> Result<(), Box<dyn Error>> {
+    let response = client
+        .chatlink(Request::new(proj1::chatroom_data::Req {
+            username: name.clone(),
+        }))
+        .await?;
     let mut inbound = response.into_inner();
 
-    let shared_buf:Arc<RwLock<Vec<MessagePacket>>> = Arc::new(RwLock::new(Vec::new()));
+    let shared_buf: Arc<RwLock<Vec<MessagePacket>>> = Arc::new(RwLock::new(Vec::new()));
     let shared_buf_clone = shared_buf.clone();
-    tokio::spawn(
-        async move {
-            loop{
-                match inbound.message().await{
-                    Ok(val)=>{
-                        match val{
-                            Some(val)=>{
-                                let mut gaurd = shared_buf_clone.write().await;
-                                gaurd.push(val);
-                                drop(gaurd);
-                            },
-                            None =>{
-                                println!("no incoming message found")
-                            }
-                        }
-                    },
-                    Err(_e) => {}
-                }
+    tokio::spawn(async move {
+        loop {
+            match inbound.message().await {
+                Ok(val) => match val {
+                    Some(val) => {
+                        let mut gaurd = shared_buf_clone.write().await;
+                        gaurd.push(val);
+                        drop(gaurd);
+                    }
+                    None => {
+                        println!("no incoming message found")
+                    }
+                },
+                Err(_e) => {}
             }
         }
-    );
+    });
 
     //TODO: make this loop breakable
-    loop{
-
+    loop {
         let mut temp_buf = shared_buf.write().await;
-        for i in &*temp_buf{
-            println!("{:?}",i);
+        for i in &*temp_buf {
+            println!("{:?}", i);
         }
         *temp_buf = Vec::new();
 
-        match rx.try_recv(){
-            Ok(msg)=>{client.send_message(proj1::chatroom_data::MessagePacket::new(msg,name.clone())).await?;}
+        match rx.try_recv() {
+            Ok(msg) => {
+                client
+                    .send_message(proj1::chatroom_data::MessagePacket::new(msg, name.clone()))
+                    .await?;
+            }
             Err(_e) => {}
         }
 
         drop(temp_buf)
     }
 
-
     Ok(())
 }
-
 
 #[allow(dead_code)]
 fn print_type_of<T>(_: &T) {

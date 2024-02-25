@@ -1,18 +1,19 @@
 use std::pin::Pin;
-use tonic::{transport::Server, Request, Response, Status};
-use tokio::sync::{mpsc,RwLock};
 use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
+use tonic::{transport::Server, Request, Response, Status};
 
-use proj1::chatroom_data::auth_server::{Auth};
-use proj1::chatroom_data::{CreationResult, LoginRequest, LoginResult, LogoutRequest, LogoutResult, User};
+use proj1::chatroom_data::auth_server::Auth;
+use proj1::chatroom_data::{
+    CreationResult, LoginRequest, LoginResult, LogoutRequest, LogoutResult, User,
+};
 use tokio_stream::Stream;
 
 use proj1::chatroom_data::chat_server::{Chat, ChatServer};
 use proj1::chatroom_data::MessagePacket;
-use proj1::chatroom_data::Req;
 use proj1::chatroom_data::Nothing;
+use proj1::chatroom_data::Req;
 use std::collections::HashMap;
-
 
 #[derive(Debug, Default)]
 pub struct ChatServerImpl {
@@ -20,7 +21,7 @@ pub struct ChatServerImpl {
     connections: Arc<RwLock<HashMap<String, mpsc::Sender<MessagePacket>>>>,
 }
 
-impl ChatServerImpl{
+impl ChatServerImpl {
     /*pub fn insert(&self,msg: MessagePacket){
         let mut gaurd = self.history.lock().unwrap();
         gaurd.push(msg);
@@ -54,7 +55,6 @@ impl Auth for ChatServerImpl {
 #[tonic::async_trait]
 
 impl Chat for ChatServerImpl {
-    
     #[allow(non_camel_case_types)]
     type chatlinkStream =
         Pin<Box<dyn Stream<Item = Result<MessagePacket, Status>> + Send + 'static>>;
@@ -63,7 +63,6 @@ impl Chat for ChatServerImpl {
         &self,
         request: Request<Req>,
     ) -> Result<Response<Self::chatlinkStream>, Status> {
-
         let name = request.into_inner().username;
         let (stream_tx, stream_rx) = mpsc::channel(1);
         // When connecting, create related sender and reciever
@@ -79,10 +78,7 @@ impl Chat for ChatServerImpl {
                     Ok(_) => {}
                     Err(_) => {
                         // If sending failed, then remove the user from shared data
-                        println!(
-                            "[Remote] stream tx sending error. Remote {}",
-                            &name
-                        );
+                        println!("[Remote] stream tx sending error. Remote {}", &name);
                         connections_clone.write().await.remove(&name);
                     }
                 }
@@ -94,21 +90,21 @@ impl Chat for ChatServerImpl {
         )))
     }
 
-    async fn send_message(&self, request: Request<MessagePacket>) -> Result<Response<Nothing>,Status>{
+    async fn send_message(
+        &self,
+        request: Request<MessagePacket>,
+    ) -> Result<Response<Nothing>, Status> {
         let req_data = request.into_inner();
-        println!("got send message command: {:?}",req_data);
+        println!("got send message command: {:?}", req_data);
         let connections = self.connections.read().await;
-        for (key,value) in &*connections{
-            println!("key: {}",key);
+        for (key, value) in &*connections {
+            println!("key: {}", key);
             value.send(req_data.clone()).await.unwrap();
         }
-        
 
         Ok(Response::new(Nothing {}))
     }
 }
-
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
