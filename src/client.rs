@@ -5,20 +5,14 @@
 }*/
 use proj1::chatroom_data::chat_client::ChatClient;
 use proj1::chatroom_data::MessagePacket;
-use proj1::chatroom_data::{CreationResult, LoginRequest, LoginResult, LogoutRequest, LogoutResult, User};
 use std::error::Error;
-use std::time::Duration;
-use tokio::time;
 use tonic::transport::Channel;
 use tonic::Request;
-use tokio::io::AsyncBufReadExt;
-use std::io::BufRead;
-
 
 use tokio::sync::RwLock;
 use std::sync::Arc;
 
-use colored::Colorize;
+//use colored::Colorize;
 use std::env;
 
 use async_stdin::recv_from_stdin;
@@ -32,26 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     //TODO: auth or smth idfk
 
-    //we are going to live in this function until a user wants to disconnect
-    //let (tx, mut rx) = std::sync::mpsc::channel::<String>();
-
-    /*tokio::spawn(move || {
-        loop{
-            let stdin = std::io::stdin();
-            let mut reader = std::io::BufReader::new(stdin);
-            println!("enter some input: ");
-            let mut buffer = String::new();
-            reader.read_line(&mut buffer).unwrap();
-    
-            sender.send(buffer.clone()).await;
-        }
-    });*/
-
-    /*std::thread::spawn(||{
-        get_input(tx)
-    });*/
-
-    let mut rx = recv_from_stdin(10);
+    let rx = recv_from_stdin(10);
     run_chatlink(&mut client,rx,args[1].clone()).await?;
 
     //once we reach here, the client has attempted to disconnect, so make the deauth call for them implicitly
@@ -59,86 +34,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub struct ChatClientImpl{
-    
-}
-
-
-/*pub fn get_input(sender: std::sync::mpsc::Sender<String>){
-
-    loop{
-        let stdin = std::io::stdin();
-        let mut reader = std::io::BufReader::new(stdin);
-        println!("enter some input: ");
-        let mut buffer = String::new();
-        reader.read_line(&mut buffer).unwrap();
-        println!("got user input {}",buffer.red());
-        sender.send(buffer.clone());
-    }
-
-}*/
-
-/*async fn run_chatlink(client: &mut ChatClient<Channel>, mut rx: std::sync::mpsc::Receiver<String>) -> Result<(), Box<dyn Error>> {
-
-    println!("in run_chatlink");
-    //setup an async stdin
-    let stdin = tokio::io::stdin();
-    let mut reader = tokio::io::BufReader::new(stdin);
-
-
-    //this ONLY works because read_line is an async function and we await on it. 
-    //otherwise the loop will never yield 
-    let outbound = async_stream::stream! {
-        loop{
-            if let Ok(msg) = rx.try_recv(){
-                println!("got a new message from the io thread. it is: {}",msg.clone().green());
-
-                yield MessagePacket::new(msg,"me".to_string());
-                //yield MessagePacket::new("FUCKYOU".to_string(),"me".to_string());
-            }
-        }
-    };
-
-    println!("do we get here?");
-
-    let response = client.chatlink(Request::new(outbound)).await?;
-    println!("do we get here 2?");
-    let mut inbound = response.into_inner();
-
-    println!("wuh 1");
-
-    while let Some(note) = inbound.message().await? {
-        println!("NOTE = {:?}", note);
-    }
-
-    println!("wuh 2");
-
-
-    Ok(())
-}*/
-
+#[allow(unreachable_code)]
 async fn run_chatlink(client: &mut ChatClient<Channel>,mut rx: tokio::sync::mpsc::Receiver<String>, name: String)->Result<(), Box<dyn Error>>{
     let response = client.chatlink(Request::new(proj1::chatroom_data::Req{username: name.clone()})).await?;
-    println!("done with server call");
     let mut inbound = response.into_inner();
-    println!("done with transform");
-
-
-    /*while let Some(note) = inbound.message().await? {
-        println!("NOTE = {:?}", note);
-    }*/
 
     let shared_buf:Arc<RwLock<Vec<MessagePacket>>> = Arc::new(RwLock::new(Vec::new()));
     let shared_buf_clone = shared_buf.clone();
     tokio::spawn(
         async move {
             loop{
-                //while let Some(val) = inbound.message().await?{
                 match inbound.message().await{
                     Ok(val)=>{
                         match val{
                             Some(val)=>{
-                                //println!("got back a message from server. it is: {:?}",val)
                                 let mut gaurd = shared_buf_clone.write().await;
                                 gaurd.push(val);
                                 drop(gaurd);
@@ -148,11 +57,13 @@ async fn run_chatlink(client: &mut ChatClient<Channel>,mut rx: tokio::sync::mpsc
                             }
                         }
                     },
-                    Err(e) => {}
+                    Err(_e) => {}
                 }
             }
         }
     );
+
+    //TODO: make this loop breakable
     loop{
 
         let mut temp_buf = shared_buf.write().await;
@@ -163,20 +74,18 @@ async fn run_chatlink(client: &mut ChatClient<Channel>,mut rx: tokio::sync::mpsc
 
         match rx.try_recv(){
             Ok(msg)=>{client.send_message(proj1::chatroom_data::MessagePacket::new(msg,name.clone())).await?;}
-            Err(e) => {}
+            Err(_e) => {}
         }
 
         drop(temp_buf)
     }
 
+
     Ok(())
 }
 
+
+#[allow(dead_code)]
 fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
 }
-
-
-//TODO:FUCK THESEBULLSHIT ASS STREAMING RPCS. GO BACK TO SINGLE SHOT MESSAGE RESPONSE
-//send message is a simple rpc.
-//request new messages is a simple rpc that clients send immeadiately after calling send message

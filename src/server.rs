@@ -1,16 +1,14 @@
 use std::pin::Pin;
 use tonic::{transport::Server, Request, Response, Status};
-use tokio::sync::{Mutex,mpsc,RwLock};
+use tokio::sync::{mpsc,RwLock};
 use std::sync::Arc;
 
 use proj1::chatroom_data::auth_server::{Auth};
 use proj1::chatroom_data::{CreationResult, LoginRequest, LoginResult, LogoutRequest, LogoutResult, User};
-use tokio_stream::{Stream, StreamExt};
+use tokio_stream::Stream;
 
 use proj1::chatroom_data::chat_server::{Chat, ChatServer};
-//use chat_server::{HistoryRequest, HistoryResult, MessagePacket, MessageSendResult};
 use proj1::chatroom_data::MessagePacket;
-//use async_mutex::Mutex;
 use proj1::chatroom_data::Req;
 use proj1::chatroom_data::Nothing;
 use std::collections::HashMap;
@@ -31,18 +29,21 @@ impl ChatServerImpl{
 
 #[tonic::async_trait]
 impl Auth for ChatServerImpl {
+    #[allow(unused_variables)]
     async fn login(
         &self,
         request: Request<LoginRequest>, // Accept request of type HelloRequest
     ) -> Result<Response<LoginResult>, Status> {
         Ok(Response::new(LoginResult {}))
     }
+    #[allow(unused_variables)]
     async fn create_user(
         &self,
         request: Request<User>,
     ) -> Result<Response<CreationResult>, Status> {
         Ok(Response::new(CreationResult {}))
     }
+    #[allow(unused_variables)]
     async fn logout(
         &self,
         request: Request<LogoutRequest>,
@@ -51,33 +52,20 @@ impl Auth for ChatServerImpl {
     }
 }
 #[tonic::async_trait]
+
 impl Chat for ChatServerImpl {
+    
+    #[allow(non_camel_case_types)]
     type chatlinkStream =
         Pin<Box<dyn Stream<Item = Result<MessagePacket, Status>> + Send + 'static>>;
-
-    /*async fn send_message(
-        &self,
-        request: Request<MessagePacket>,
-    ) -> Result<Response<MessageSendResult>, Status> {
-        Ok(Response::new(chat_server::MessageSendResult {}))
-    }
-    async fn get_history(
-        &self,
-        request: Request<HistoryRequest>,
-    ) -> Result<Response<HistoryResult>, Status> {
-        Ok(Response::new(chat_server::HistoryResult {}))
-        }*/
 
     async fn chatlink(
         &self,
         request: Request<Req>,
     ) -> Result<Response<Self::chatlinkStream>, Status> {
-        println!("entering chatlink function in server");
-        //let mut stream = request.into_inner();
-
 
         let name = request.into_inner().username;
-        let (stream_tx, stream_rx) = mpsc::channel(1); // Fn usage
+        let (stream_tx, stream_rx) = mpsc::channel(1);
         // When connecting, create related sender and reciever
         let (tx, mut rx) = mpsc::channel(1);
         {
@@ -100,30 +88,7 @@ impl Chat for ChatServerImpl {
                 }
             }
         });
-
-
-        /*let output = async_stream::stream! {
-            while let Some(note) = stream.next().await {
-                println!("got a message");
-                //let mut gaurd = self.history.lock().unwrap();s
-                //gaurd.push(note.clone().unwrap());
-                //self.history.drop();
-                //std::mem::drop(gaurd);
-
-                //let mut gaurd = self.history.lock().await;
-                //gaurd.push(note.clone().unwrap());
-                //drop(gaurd);
-
-                //self.insert(note.clone().unwrap());
-                //let mut fuckyou = self.history.clone();
-                //fuckyou.push(note.clone().unwrap());
-                //self.history = fuckyou;
-                yield Ok(note.clone().unwrap());
-            }
-        };*/
-
         println!("returning stream to client");
-        //Ok(Response::new(Box::pin(output) as Self::chatlinkStream))
         Ok(Response::new(Box::pin(
             tokio_stream::wrappers::ReceiverStream::new(stream_rx),
         )))
@@ -132,13 +97,10 @@ impl Chat for ChatServerImpl {
     async fn send_message(&self, request: Request<MessagePacket>) -> Result<Response<Nothing>,Status>{
         let req_data = request.into_inner();
         println!("got send message command: {:?}",req_data);
-        //let user_name = req_data.user;
-        //let content = req_data.msg;
-        //let msg = Msg { user_name, content };
         let connections = self.connections.read().await;
         for (key,value) in &*connections{
             println!("key: {}",key);
-            value.send(req_data.clone()).await;
+            value.send(req_data.clone()).await.unwrap();
         }
         
 
