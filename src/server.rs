@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use tonic::{transport::Server, Request, Response, Status};
-use std::sync::{Arc,Mutex};
+use tokio::sync::{Mutex,mpsc,RwLock};
+use std::sync::Arc;
 
 use proj1::chatroom_data::auth_server::{Auth};
 use proj1::chatroom_data::{CreationResult, LoginRequest, LoginResult, LogoutRequest, LogoutResult, User};
@@ -10,10 +11,15 @@ use proj1::chatroom_data::chat_server::{Chat, ChatServer};
 //use chat_server::{HistoryRequest, HistoryResult, MessagePacket, MessageSendResult};
 use proj1::chatroom_data::MessagePacket;
 //use async_mutex::Mutex;
+use proj1::chatroom_data::Req;
+use proj1::chatroom_data::Nothing;
+use std::collections::HashMap;
+
 
 #[derive(Debug, Default)]
 pub struct ChatServerImpl {
-    history: Vec<MessagePacket>
+    //history: Vec<MessagePacket>
+    connections: Arc<RwLock<HashMap<String, mpsc::Sender<MessagePacket>>>>,
 }
 
 impl ChatServerImpl{
@@ -64,12 +70,39 @@ impl Chat for ChatServerImpl {
 
     async fn chatlink(
         &self,
-        request: Request<tonic::Streaming<MessagePacket>>,
+        request: Request<Req>,
     ) -> Result<Response<Self::chatlinkStream>, Status> {
         println!("entering chatlink function in server");
-        let mut stream = request.into_inner();
+        //let mut stream = request.into_inner();
 
-        let output = async_stream::stream! {
+
+        let name = request.into_inner().username;
+        let (stream_tx, stream_rx) = mpsc::channel(1); // Fn usage
+        // When connecting, create related sender and reciever
+        let (tx, mut rx) = mpsc::channel(1);
+        {
+            self.connections.write().await.insert(name.clone(), tx);
+        }
+
+        let connections_clone = self.connections.clone();
+        tokio::spawn(async move {
+            while let Some(msg) = rx.recv().await {
+                match stream_tx.send(Ok(msg)).await {
+                    Ok(_) => {}
+                    Err(_) => {
+                        // If sending failed, then remove the user from shared data
+                        println!(
+                            "[Remote] stream tx sending error. Remote {}",
+                            &name
+                        );
+                        connections_clone.write().await.remove(&name);
+                    }
+                }
+            }
+        });
+
+
+        /*let output = async_stream::stream! {
             while let Some(note) = stream.next().await {
                 println!("got a message");
                 //let mut gaurd = self.history.lock().unwrap();s
@@ -87,12 +120,29 @@ impl Chat for ChatServerImpl {
                 //self.history = fuckyou;
                 yield Ok(note.clone().unwrap());
             }
-
-
-        };
+        };*/
 
         println!("returning stream to client");
-        Ok(Response::new(Box::pin(output) as Self::chatlinkStream))
+        //Ok(Response::new(Box::pin(output) as Self::chatlinkStream))
+        Ok(Response::new(Box::pin(
+            tokio_stream::wrappers::ReceiverStream::new(stream_rx),
+        )))
+    }
+
+    async fn send_message(&self, request: Request<MessagePacket>) -> Result<Response<Nothing>,Status>{
+        let req_data = request.into_inner();
+        println!("got send message command: {:?}",req_data);
+        //let user_name = req_data.user;
+        //let content = req_data.msg;
+        //let msg = Msg { user_name, content };
+        let connections = self.connections.read().await;
+        for (key,value) in &*connections{
+            println!("key: {}",key);
+            value.send(req_data.clone()).await;
+        }
+        
+
+        Ok(Response::new(Nothing {}))
     }
 }
 

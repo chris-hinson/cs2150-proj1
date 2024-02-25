@@ -14,17 +14,26 @@ use tonic::Request;
 use tokio::io::AsyncBufReadExt;
 use std::io::BufRead;
 
+
+use tokio::sync::RwLock;
+use std::sync::Arc;
+
 use colored::Colorize;
+use std::env;
+
+use async_stdin::recv_from_stdin;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = env::args().collect();
+    //println!("{}",args[1]);
     //create client and connect to the central sever
     let mut client = ChatClient::connect("http://[::1]:50051").await?;
 
     //TODO: auth or smth idfk
 
     //we are going to live in this function until a user wants to disconnect
-    let (tx, mut rx) = std::sync::mpsc::channel::<String>();
+    //let (tx, mut rx) = std::sync::mpsc::channel::<String>();
 
     /*tokio::spawn(move || {
         loop{
@@ -38,12 +47,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });*/
 
-    std::thread::spawn(||{
+    /*std::thread::spawn(||{
         get_input(tx)
-    });
+    });*/
 
-    println!("post thread spawn");
-    run_chatlink(&mut client,rx).await?;
+    let mut rx = recv_from_stdin(10);
+    run_chatlink(&mut client,rx,args[1].clone()).await?;
 
     //once we reach here, the client has attempted to disconnect, so make the deauth call for them implicitly
 
@@ -55,7 +64,7 @@ pub struct ChatClientImpl{
 }
 
 
-pub fn get_input(sender: std::sync::mpsc::Sender<String>){
+/*pub fn get_input(sender: std::sync::mpsc::Sender<String>){
 
     loop{
         let stdin = std::io::stdin();
@@ -67,9 +76,9 @@ pub fn get_input(sender: std::sync::mpsc::Sender<String>){
         sender.send(buffer.clone());
     }
 
-}
+}*/
 
-async fn run_chatlink(client: &mut ChatClient<Channel>, mut rx: std::sync::mpsc::Receiver<String>) -> Result<(), Box<dyn Error>> {
+/*async fn run_chatlink(client: &mut ChatClient<Channel>, mut rx: std::sync::mpsc::Receiver<String>) -> Result<(), Box<dyn Error>> {
 
     println!("in run_chatlink");
     //setup an async stdin
@@ -106,8 +115,66 @@ async fn run_chatlink(client: &mut ChatClient<Channel>, mut rx: std::sync::mpsc:
 
 
     Ok(())
+}*/
+
+async fn run_chatlink(client: &mut ChatClient<Channel>,mut rx: tokio::sync::mpsc::Receiver<String>, name: String)->Result<(), Box<dyn Error>>{
+    let response = client.chatlink(Request::new(proj1::chatroom_data::Req{username: name.clone()})).await?;
+    println!("done with server call");
+    let mut inbound = response.into_inner();
+    println!("done with transform");
+
+
+    /*while let Some(note) = inbound.message().await? {
+        println!("NOTE = {:?}", note);
+    }*/
+
+    let shared_buf:Arc<RwLock<Vec<MessagePacket>>> = Arc::new(RwLock::new(Vec::new()));
+    let shared_buf_clone = shared_buf.clone();
+    tokio::spawn(
+        async move {
+            loop{
+                //while let Some(val) = inbound.message().await?{
+                match inbound.message().await{
+                    Ok(val)=>{
+                        match val{
+                            Some(val)=>{
+                                //println!("got back a message from server. it is: {:?}",val)
+                                let mut gaurd = shared_buf_clone.write().await;
+                                gaurd.push(val);
+                                drop(gaurd);
+                            },
+                            None =>{
+                                println!("no incoming message found")
+                            }
+                        }
+                    },
+                    Err(e) => {}
+                }
+            }
+        }
+    );
+    loop{
+
+        let mut temp_buf = shared_buf.write().await;
+        for i in &*temp_buf{
+            println!("{:?}",i);
+        }
+        *temp_buf = Vec::new();
+
+        match rx.try_recv(){
+            Ok(msg)=>{client.send_message(proj1::chatroom_data::MessagePacket::new(msg,name.clone())).await?;}
+            Err(e) => {}
+        }
+
+        drop(temp_buf)
+    }
+
+    Ok(())
 }
 
+fn print_type_of<T>(_: &T) {
+    println!("{}", std::any::type_name::<T>())
+}
 
 
 //TODO:FUCK THESEBULLSHIT ASS STREAMING RPCS. GO BACK TO SINGLE SHOT MESSAGE RESPONSE

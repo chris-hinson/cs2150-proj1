@@ -13,11 +13,19 @@ message CreationResult{}
 message LogoutRequest{}
 message LogoutResult{}
 
+
+message Req{
+    string username = 1;
+}
+
+message Nothing{};
+
 //once a user is successfully authed, they should initiate a chatlink rpc,
 //in which they will stay until they choose to terminate themselves
 service Chat{
-    rpc chatlink(stream MessagePacket) returns (stream MessagePacket){};
+    rpc chatlink(Req) returns (stream MessagePacket){};
     //rpc get_history(HistoryRequest) returns (HistoryResult){};
+    rpc send_message(MessagePacket) returns (Nothing){};
 }
 message MessagePacket{
     string msg = 1;
