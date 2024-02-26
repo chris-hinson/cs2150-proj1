@@ -26,6 +26,7 @@ impl ChatServerImpl {
         let mut gaurd = self.history.lock().unwrap();
         gaurd.push(msg);
     }*/
+    async fn shutdown() {}
 }
 
 #[tonic::async_trait]
@@ -96,6 +97,11 @@ impl Chat for ChatServerImpl {
         //send the message to all currently connected users
         let req_data = request.into_inner();
         println!("got send message command: {:?}", req_data);
+
+        if req_data.msg.eq("/killsever") {
+            //ChatServerImpl::shutdown().await;
+        }
+
         let connections = self.connections.read().await;
         for (key, value) in &*connections {
             println!("key: {}", key);
@@ -134,6 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Server::builder()
         //.add_service(AuthServer::new(chatroom))
         .add_service(ChatServer::new(chatroom))
+        //.serve_with_shutdown(addr, ChatServerImpl::shutdown())
         .serve(addr)
         .await?;
 

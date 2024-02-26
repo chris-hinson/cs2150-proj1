@@ -14,11 +14,7 @@ message LogoutRequest{}
 message LogoutResult{}
 
 
-message Req{
-    string username = 1;
-}
 
-message Nothing{};
 
 //once a user is successfully authed, they should initiate a chatlink rpc,
 //in which they will stay until they choose to terminate themselves
@@ -32,6 +28,11 @@ message MessagePacket{
     string user = 2;
     uint64 ts = 3;
 }
+message Req{
+    string username = 1;
+}
+
+message Nothing{};
 //message MessageSendResult{}
 //message HistoryRequest{}
 //message HistoryResult{}

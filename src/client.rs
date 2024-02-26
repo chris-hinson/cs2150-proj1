@@ -76,7 +76,7 @@ async fn run_chatlink(
         .unwrap();
 
     //TODO: make this loop breakable
-    loop {
+    'running: loop {
         let mut temp_buf = shared_buf.write().await;
         for i in &*temp_buf {
             println!("[{}]:{}", i.user, i.msg);
@@ -86,6 +86,10 @@ async fn run_chatlink(
 
         match rx.try_recv() {
             Ok(msg) => {
+                if msg.eq("/kill") {
+                    break 'running;
+                }
+
                 client
                     .send_message(proj1::chatroom_data::MessagePacket::new(msg, name.clone()))
                     .await?;
