@@ -11,9 +11,6 @@ path = "src/server.rs"
 name = "chatroom-client"
 path = "src/client.rs"
 
-[[bin]]
-name = "driver"
-paht = "src/driver.rs"
 
 [dependencies]
 async-channel = "2.2.0"

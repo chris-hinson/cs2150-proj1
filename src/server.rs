@@ -21,9 +21,9 @@ pub struct ChatServerImpl {
     history: Arc<RwLock<Vec<MessagePacket>>>,
     //map of senders to currently active clients
     connections: Arc<RwLock<HashMap<String, mpsc::Sender<MessagePacket>>>>,
-    //markers for the most recent message all clients have received. when reconnecting, 
+    //markers for the most recent message all clients have received. when reconnecting,
     //a user should only receive UNREAD message. that is, messages newer than their marker
-    markers: Arc<RwLock<HashMap<String,usize>>>
+    markers: Arc<RwLock<HashMap<String, usize>>>,
 }
 
 impl ChatServerImpl {
@@ -31,7 +31,6 @@ impl ChatServerImpl {
         let mut gaurd = self.history.lock().unwrap();
         gaurd.push(msg);
     }*/
-
 }
 
 #[tonic::async_trait]
@@ -77,6 +76,7 @@ impl Chat for ChatServerImpl {
         }
 
         let connections_clone = self.connections.clone();
+        let markers_clone = self.markers.clone();
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
                 match stream_tx.send(Ok(msg)).await {
@@ -85,6 +85,11 @@ impl Chat for ChatServerImpl {
                         // If sending failed, then remove the user from shared data
                         println!("[Remote] stream tx sending error. Remote {}", &name);
                         connections_clone.write().await.remove(&name);
+                        let mut markers = markers_clone.write().await;
+                        markers.get_mut(&name).map(|val| {
+                            *val -= 1;
+                        });
+                        drop(markers);
                     }
                 }
             }
@@ -101,7 +106,7 @@ impl Chat for ChatServerImpl {
     ) -> Result<Response<Nothing>, Status> {
         //send the message to all currently connected users
         let req_data = request.into_inner();
-        println!("got send message command: {:?}", req_data);
+        println!("user [{}] says {{{}}}", req_data.user, req_data.msg);
 
         //append the message to the history
         let mut history = self.history.write().await;
@@ -111,15 +116,17 @@ impl Chat for ChatServerImpl {
 
         //send new message to all connected users and update their markers
         let connections = self.connections.read().await;
-        let mut markers = self.markers.write().await;
         for (key, value) in &*connections {
             println!("key: {}", key);
             value.send(req_data.clone()).await.unwrap();
-            markers.get_mut(key).map(|val| { *val = cur_msg_index; });
+
+            let mut markers = self.markers.write().await;
+            markers.get_mut(key).map(|val| {
+                *val = cur_msg_index;
+            });
+            drop(markers);
         }
         drop(connections);
-        drop(markers);
-
 
         Ok(Response::new(Nothing {}))
     }
