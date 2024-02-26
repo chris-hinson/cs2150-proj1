@@ -8,4 +8,4 @@ RUN apt-get update \
       protobuf-compiler
 
 RUN cargo build
-CMD cargo run --bin driver
+CMD cargo test -- --test-threads=1 --nocapture driver

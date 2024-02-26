@@ -14,6 +14,7 @@ use proj1::chatroom_data::MessagePacket;
 use proj1::chatroom_data::Nothing;
 use proj1::chatroom_data::Req;
 use std::collections::HashMap;
+use std::env;
 
 #[derive(Debug, Default)]
 pub struct ChatServerImpl {
@@ -155,7 +156,11 @@ impl Chat for ChatServerImpl {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "[::1]:50051".parse()?;
+    let args: Vec<String> = env::args().collect();
+    let port = args[1].parse::<usize>().unwrap();
+    //50051
+    //let addr = format!("[::1]:{}",port).parse()?;
+    let addr = format!("0.0.0.0:{}",port).parse().unwrap();
     let chatroom = ChatServerImpl::default();
 
     Server::builder()

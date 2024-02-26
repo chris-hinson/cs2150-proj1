@@ -92,9 +92,10 @@ pub mod tests {
             }
         }
 
-        pub fn add_client(&mut self) {
+        pub fn add_client(&mut self, port: String) {
             let mut client = Command::new("./target/debug/chatroom-client")
                 .arg(format!("{}", self.client_pool.len()))
+                .arg(port)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .spawn()
@@ -105,9 +106,10 @@ pub mod tests {
             self.client_pool.push((client, client_stdin))
         }
 
-        pub fn add_client_with_id(&mut self, id: usize) {
+        pub fn add_client_with_id(&mut self, id: usize,port: String) {
             let mut client = Command::new("./target/debug/chatroom-client")
                 .arg(format!("{}", id))
+                .arg(port)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .spawn()
@@ -120,8 +122,9 @@ pub mod tests {
     }
 
     //start a server and n clients and return the server handle + client process pool
-    pub fn boot(num_clients: usize) -> TestEnv {
+    pub fn boot(num_clients: usize, port:String) -> TestEnv {
         let server = Command::new("./target/debug/chatroom-server")
+            .arg(port.clone())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -132,6 +135,7 @@ pub mod tests {
         for i in 0..num_clients {
             let mut client = Command::new("./target/debug/chatroom-client")
                 .arg(format!("{}", i))
+                .arg(port.clone())
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .spawn()
@@ -153,7 +157,7 @@ pub mod tests {
     //server receives the messages from the client
     #[test]
     pub fn driver_test_1() {
-        let mut test_env = boot(1);
+        let mut test_env = boot(1,"50051".to_string());
 
         let client_1_inputs = vec!["hey", "hi", "hello"];
 
@@ -195,7 +199,7 @@ pub mod tests {
     //server got all messages from both clients
     #[test]
     pub fn driver_test_2() {
-        let mut test_env = boot(2);
+        let mut test_env = boot(2,"50052".to_string());
         let client_1_inputs = vec!["hey", "hi", "hello"];
         let client_2_inputs = vec!["foo", "bar", "baz"];
 
@@ -260,14 +264,14 @@ pub mod tests {
     //client 2 should recieve all messages that client 1 sent
     #[test]
     pub fn driver_test_3() {
-        let mut test_env = boot(1);
+        let mut test_env = boot(1,"50053".to_string());
         let client_1_inputs = vec!["hey", "hi", "hello"];
 
         for line in &client_1_inputs {
             test_env.send_msg(0, line.to_string()).unwrap();
         }
 
-        test_env.add_client();
+        test_env.add_client("50053".to_string());
 
         let res = test_env.end_test();
         //this does not actually outpu if you dont run cargo test with --nocapture
@@ -296,7 +300,7 @@ pub mod tests {
     //client 1 logs should contain its initial messages ONLY ONCE, as well as the messages sent by client 2 after it disconnected
     #[test]
     pub fn driver_test_4() {
-        let mut test_env = boot(2);
+        let mut test_env = boot(2,"50054".to_string());
         let client_1_inputs = vec!["hey", "hi", "hello"];
         let client_2_inputs = vec!["foo", "bar", "baz"];
 
@@ -312,7 +316,7 @@ pub mod tests {
             test_env.send_msg(0, line.to_string()).unwrap();
         }
 
-        test_env.add_client_with_id(0);
+        test_env.add_client_with_id(0,"50054".to_string());
         let res = test_env.end_test();
 
         println!("{:?}", first_session_client_output);

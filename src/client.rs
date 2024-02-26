@@ -23,7 +23,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     //println!("{}",args[1]);
     //create client and connect to the central sever
-    let mut client = ChatClient::connect("http://[::1]:50051").await?;
+    let port = args[2].clone();
+    //let mut client = ChatClient::connect(format!("[::1]:{}",port)).await?;
+    let mut client = ChatClient::connect(format!("https://0.0.0.0:{}",port)).await?;
 
     //TODO: auth or smth idfk
 
