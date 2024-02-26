@@ -7,4 +7,5 @@ RUN apt-get update \
     apt-get install --no-install-recommends --assume-yes \
       protobuf-compiler
 
-RUN cargo run --bin driver
+RUN cargo build
+CMD cargo run --bin driver
