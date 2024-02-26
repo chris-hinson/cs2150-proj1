@@ -51,7 +51,7 @@ async fn run_chatlink(
     let shared_buf: Arc<RwLock<Vec<MessagePacket>>> = Arc::new(RwLock::new(Vec::new()));
     let shared_buf_clone = shared_buf.clone();
     tokio::spawn(async move {
-        loop {
+        'input_loop: loop {
             match inbound.message().await {
                 Ok(val) => match val {
                     Some(val) => {
@@ -60,7 +60,8 @@ async fn run_chatlink(
                         drop(gaurd);
                     }
                     None => {
-                        println!("no incoming message found")
+                        //println!("no incoming message found")
+                        break 'input_loop;
                     }
                 },
                 Err(_e) => {}
@@ -68,6 +69,7 @@ async fn run_chatlink(
         }
     });
 
+    //get chatroom history
     client
         .get_history(Req {
             username: name.clone(),
@@ -75,7 +77,7 @@ async fn run_chatlink(
         .await
         .unwrap();
 
-    //TODO: make this loop breakable
+    //main input-send-recv running loop
     'running: loop {
         let mut temp_buf = shared_buf.write().await;
         for i in &*temp_buf {
