@@ -17,8 +17,13 @@ use std::collections::HashMap;
 
 #[derive(Debug, Default)]
 pub struct ChatServerImpl {
+    //full message history of the server. does NOT persist across reboots
     history: Arc<RwLock<Vec<MessagePacket>>>,
+    //map of senders to currently active clients
     connections: Arc<RwLock<HashMap<String, mpsc::Sender<MessagePacket>>>>,
+    //markers for the most recent message all clients have received. when reconnecting, 
+    //a user should only receive UNREAD message. that is, messages newer than their marker
+    markers: Arc<RwLock<HashMap<String,usize>>>
 }
 
 impl ChatServerImpl {
@@ -26,7 +31,7 @@ impl ChatServerImpl {
         let mut gaurd = self.history.lock().unwrap();
         gaurd.push(msg);
     }*/
-    async fn shutdown() {}
+
 }
 
 #[tonic::async_trait]
@@ -98,20 +103,23 @@ impl Chat for ChatServerImpl {
         let req_data = request.into_inner();
         println!("got send message command: {:?}", req_data);
 
-        if req_data.msg.eq("/killsever") {
-            //ChatServerImpl::shutdown().await;
-        }
+        //append the message to the history
+        let mut history = self.history.write().await;
+        history.push(req_data.clone());
+        let cur_msg_index = history.len();
+        drop(history);
 
+        //send new message to all connected users and update their markers
         let connections = self.connections.read().await;
+        let mut markers = self.markers.write().await;
         for (key, value) in &*connections {
             println!("key: {}", key);
             value.send(req_data.clone()).await.unwrap();
+            markers.get_mut(key).map(|val| { *val = cur_msg_index; });
         }
+        drop(connections);
+        drop(markers);
 
-        //append the message to the history
-        let mut history = self.history.write().await;
-        history.push(req_data);
-        drop(history);
 
         Ok(Response::new(Nothing {}))
     }
@@ -119,12 +127,18 @@ impl Chat for ChatServerImpl {
     async fn get_history(&self, request: Request<Req>) -> Result<Response<Nothing>, Status> {
         //who are we giving the collective history to?
         let name = request.into_inner().username;
+        //what is the last messge this user saw
+        let mut markers = self.markers.write().await;
+        //set user marker to zero if this is their first time connecting
+        let last_msg_index = *markers.entry(name.clone()).or_insert(0);
+        drop(markers);
 
         //shared state gaurd for both the msg channel and the global history
         let channels = self.connections.read().await;
         let history = self.history.read().await;
+        let history_len = history.len();
         //just send them every message in the history
-        for msg in &*history {
+        for msg in &(history[last_msg_index..history_len]) {
             channels[&name].send(msg.clone()).await.unwrap();
         }
 
