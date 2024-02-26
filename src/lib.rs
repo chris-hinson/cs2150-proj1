@@ -130,6 +130,8 @@ pub mod tests {
             .spawn()
             .expect("Failed to spawn child process");
 
+        std::thread::sleep(std::time::Duration::from_millis(5000));
+
         let mut client_pool: Vec<(std::process::Child, std::process::ChildStdin)> = Vec::new();
 
         for i in 0..num_clients {
